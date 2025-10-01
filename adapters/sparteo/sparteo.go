@@ -3,18 +3,19 @@ package sparteo
 import (
 	"fmt"
 	"net/http"
+	"text/template"
 
 	"github.com/prebid/openrtb/v20/openrtb2"
 	"github.com/prebid/prebid-server/v3/adapters"
 	"github.com/prebid/prebid-server/v3/config"
 	"github.com/prebid/prebid-server/v3/errortypes"
+	"github.com/prebid/prebid-server/v3/macros"
 	"github.com/prebid/prebid-server/v3/openrtb_ext"
 	"github.com/prebid/prebid-server/v3/util/jsonutil"
 )
 
 type adapter struct {
-	endpoint   string
-	bidderName string
+	endpoint *template.Template
 }
 
 type extBidWrapper struct {
@@ -22,10 +23,15 @@ type extBidWrapper struct {
 }
 
 func Builder(bidderName openrtb_ext.BidderName, cfg config.Adapter, server config.Server) (adapters.Bidder, error) {
-	return &adapter{
-		endpoint:   cfg.Endpoint,
-		bidderName: string(bidderName),
-	}, nil
+	template, err := template.New("endpointTemplate").Parse(cfg.Endpoint)
+	if err != nil {
+		return nil, fmt.Errorf("unable to parse endpoint url template: %v", err)
+	}
+
+	bidder := &adapter{
+		endpoint: template,
+	}
+	return bidder, nil
 }
 
 func parseExt(imp *openrtb2.Imp) (*openrtb_ext.ExtImpSparteo, error) {
@@ -47,6 +53,7 @@ func parseExt(imp *openrtb2.Imp) (*openrtb_ext.ExtImpSparteo, error) {
 
 func (a *adapter) MakeRequests(req *openrtb2.BidRequest, reqInfo *adapters.ExtraRequestInfo) ([]*adapters.RequestData, []error) {
 	request := *req
+	var errs []error
 
 	request.Imp = make([]openrtb2.Imp, len(req.Imp))
 	copy(request.Imp, req.Imp)
@@ -56,12 +63,19 @@ func (a *adapter) MakeRequests(req *openrtb2.BidRequest, reqInfo *adapters.Extra
 		request.Site = &siteCopy
 	}
 
-	if req.Site != nil && req.Site.Publisher != nil {
-		publisherCopy := *req.Site.Publisher
-		request.Site.Publisher = &publisherCopy
+	var publisherDomain string
+
+	if req.Site != nil {
+		if req.Site.Publisher != nil {
+			publisherCopy := *req.Site.Publisher
+			request.Site.Publisher = &publisherCopy
+			publisherDomain = publisherCopy.Domain
+		}
+		if publisherDomain == "" {
+			publisherDomain = req.Site.Domain
+		}
 	}
 
-	var errs []error
 	var siteNetworkId string
 
 	for i, imp := range request.Imp {
@@ -149,9 +163,14 @@ func (a *adapter) MakeRequests(req *openrtb2.BidRequest, reqInfo *adapters.Extra
 		return nil, errs
 	}
 
+	uri, err := a.buildEndpointURL(siteNetworkId, publisherDomain)
+	if err != nil {
+		return nil, []error{err}
+	}
+
 	requestData := &adapters.RequestData{
 		Method: http.MethodPost,
-		Uri:    a.endpoint,
+		Uri:    uri,
 		Body:   body,
 		ImpIDs: openrtb_ext.GetImpIDs(request.Imp),
 		Headers: http.Header{
@@ -160,6 +179,11 @@ func (a *adapter) MakeRequests(req *openrtb2.BidRequest, reqInfo *adapters.Extra
 	}
 
 	return []*adapters.RequestData{requestData}, errs
+}
+
+func (a *adapter) buildEndpointURL(networkId string, domain string) (string, error) {
+	endpointParams := macros.EndpointTemplateParams{NetworkId: networkId, PublisherDomain: domain}
+	return macros.ResolveMacros(a.endpoint, endpointParams)
 }
 
 func (a *adapter) MakeBids(req *openrtb2.BidRequest, reqData *adapters.RequestData, respData *adapters.ResponseData) (*adapters.BidderResponse, []error) {

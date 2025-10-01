@@ -7,21 +7,23 @@ import (
 
 // EndpointTemplateParams specifies macros for bidder endpoints.
 type EndpointTemplateParams struct {
-	Host        string
-	PublisherID string
-	ZoneID      string
-	SourceId    string
-	AccountID   string
-	AdUnit      string
-	MediaType   string
-	GvlID       string
-	PageID      string
-	SupplyId    string
-	ImpID       string
-	SspId       string
-	SspID       string
-	SeatID      string
-	TokenID     string
+	Host            string
+	PublisherID     string
+	ZoneID          string
+	SourceId        string
+	AccountID       string
+	AdUnit          string
+	MediaType       string
+	GvlID           string
+	PageID          string
+	SupplyId        string
+	ImpID           string
+	SspId           string
+	SspID           string
+	SeatID          string
+	TokenID         string
+	NetworkId       string
+	PublisherDomain string
 }
 
 // UserSyncPrivacy specifies privacy policy macros, represented as strings, for user sync urls.
