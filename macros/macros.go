@@ -22,6 +22,9 @@ type EndpointTemplateParams struct {
 	SspID       string
 	SeatID      string
 	TokenID     string
+	NetworkId   string
+	Domain      string
+	Bundle      string
 }
 
 // UserSyncPrivacy specifies privacy policy macros, represented as strings, for user sync urls.
